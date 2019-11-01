@@ -152,12 +152,15 @@ def get_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs, ref_contigs, ref_con
         return get_junk_fragment(fragment_length), ['junk_seq']
     elif fragment_type == 'random':
         return get_random_sequence(fragment_length), ['random_seq']
-
+    try:
+        forward_strand_probability = args.forward_strand
+    except:
+        forward_strand_probability = 0.5
     # The get_real_fragment function can return nothing (due to --small_plasmid_bias) so we try
     # repeatedly until we get a result.
     for _ in range(1000):
         seq, info = get_real_fragment(fragment_length, ref_seqs, rev_comp_ref_seqs, ref_contigs,
-                                      ref_contig_weights, ref_circular, args.forward_strand)
+                                      ref_contig_weights, ref_circular, forward_strand_probability)
         if seq != '':
             return seq, info
     sys.exit('Error: failed to generate any sequence fragments - are your read lengths '
