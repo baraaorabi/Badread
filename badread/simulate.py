@@ -28,6 +28,7 @@ from .identities import Identities
 from .version import __version__
 from . import settings
 
+FORWARD_STRAND_PROBABILTY = 0.20
 
 def simulate(args, output=sys.stderr):
     print_intro(output)
@@ -188,7 +189,7 @@ def get_real_fragment(fragment_length, ref_seqs, rev_comp_ref_seqs, ref_contigs,
     else:
         contig = random.choices(ref_contigs, weights=ref_contig_weights)[0]
     info = [contig]
-    if random_chance(0.5):
+    if random_chance(FORWARD_STRAND_PROBABILTY):
         seq = ref_seqs[contig]
         info.append('+strand')
     else:
