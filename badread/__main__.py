@@ -124,6 +124,8 @@ def simulate_subparser(subparsers):
 
     problem_args = group.add_argument_group('Problems',
                                             description='Ways reads can go wrong')
+    problem_args.add_argument('--forward_strand', type=float, default=0.5,
+                              help='Probability that a read is on the forward strand (Default: 0.5)')
     problem_args.add_argument('--junk_reads', type=float, default=1,
                               help='This percentage of reads will be low-complexity junk')
     problem_args.add_argument('--random_reads', type=float, default=1,
@@ -249,6 +251,8 @@ def check_simulate_args(args):
         sys.exit(f'Error: {args.error_model} is not a file\n'
                  f'  --qscore_model must be "random", "ideal" or a filename')
 
+    if args.forward_strand > 1 or args.forward_strand < 0:
+        sys.exit('Error: --forward_strand should be in [0, 1]')
     if args.chimeras > 50:
         sys.exit('Error: --chimeras cannot be greater than 50')
     if args.junk_reads > 100:

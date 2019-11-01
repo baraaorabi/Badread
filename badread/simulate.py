@@ -28,8 +28,6 @@ from .identities import Identities
 from .version import __version__
 from . import settings
 
-FORWARD_STRAND_PROBABILTY = 0.20
-
 def simulate(args, output=sys.stderr):
     print_intro(output)
     if args.seed is not None:
@@ -159,7 +157,7 @@ def get_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs, ref_contigs, ref_con
     # repeatedly until we get a result.
     for _ in range(1000):
         seq, info = get_real_fragment(fragment_length, ref_seqs, rev_comp_ref_seqs, ref_contigs,
-                                      ref_contig_weights, ref_circular)
+                                      ref_contig_weights, ref_circular, args.forward_strand)
         if seq != '':
             return seq, info
     sys.exit('Error: failed to generate any sequence fragments - are your read lengths '
@@ -182,14 +180,14 @@ def get_fragment_type(args):
 
 
 def get_real_fragment(fragment_length, ref_seqs, rev_comp_ref_seqs, ref_contigs,
-                      ref_contig_weights, ref_circular):
+                      ref_contig_weights, ref_circular, forward_strand_probability):
 
     if len(ref_contigs) == 1:
         contig = ref_contigs[0]
     else:
         contig = random.choices(ref_contigs, weights=ref_contig_weights)[0]
     info = [contig]
-    if random_chance(FORWARD_STRAND_PROBABILTY):
+    if random_chance(forward_strand_probability):
         seq = ref_seqs[contig]
         info.append('+strand')
     else:
