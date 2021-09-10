@@ -115,8 +115,8 @@ def make_qscore_model(args, output=sys.stderr, dot_interval=1000):
                 ref_kmer = aligned_ref_seq[start:end]
 
                 cigar = []
-                for i, read_base in enumerate(read_kmer):
-                    ref_base = ref_kmer[i]
+                for j, read_base in enumerate(read_kmer):
+                    ref_base = ref_kmer[j]
                     assert read_base != ' ' or ref_base != ' '
                     if read_base == ref_base:
                         cigar.append('=')
@@ -143,9 +143,9 @@ def make_qscore_model(args, output=sys.stderr, dot_interval=1000):
                 while aligned_read_seq[start] == ' ':
                     start += 1
                 end += 1
+        i += 1
         if i % dot_interval == 0:
-            i += 1
-        print('.', end='', file=output, flush=True)
+            print('.', end='', file=output, flush=True)
     print('', file=output, flush=True)
 
     print_qscore_fractions('overall', overall_qscores, 0)
@@ -185,10 +185,12 @@ class QScoreModel(object):
             self.set_up_random_model(output)
         elif model_type_or_filename == 'ideal':
             self.set_up_ideal_model(output)
-        elif model_type_or_filename == 'nanopore':
-            self.load_from_file(str(this_script_dir / 'qscore_models' / 'nanopore.gz'), output)
-        elif model_type_or_filename == 'pacbio':
-            self.load_from_file(str(this_script_dir / 'qscore_models' / 'pacbio.gz'), output)
+        elif model_type_or_filename == 'nanopore2018':
+            self.load_from_file(str(this_script_dir / 'qscore_models' / 'nanopore2018.gz'), output)
+        elif model_type_or_filename == 'nanopore2020':
+            self.load_from_file(str(this_script_dir / 'qscore_models' / 'nanopore2020.gz'), output)
+        elif model_type_or_filename == 'pacbio2016':
+            self.load_from_file(str(this_script_dir / 'qscore_models' / 'pacbio2016.gz'), output)
         else:
             self.load_from_file(model_type_or_filename, output)
 
