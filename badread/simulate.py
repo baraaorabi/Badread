@@ -59,9 +59,7 @@ def simulate(args, output=sys.stderr):
     print('', file=output)
     count, total_size = 0, 0
     print_progress(count, total_size, target_size, output)
-    ref_contig_idx = -1
-    while ref_contig_idx < len(ref_contigs):
-        ref_contig_idx += 1
+    for ref_contig_idx in range(len(ref_contigs)):
         fragment, info = build_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs, ref_contigs,
                                         ref_contig_weights, ref_circular, args, start_adapt_rate,
                                         start_adapt_amount, end_adapt_rate, end_adapt_amount, ref_contig_idx)
