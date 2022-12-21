@@ -23,6 +23,7 @@ from .misc import load_fasta, get_random_sequence, reverse_complement, random_ch
     float_to_str, str_is_int, identity_from_edlib_cigar
 from .error_model import ErrorModel
 from .qscore_model import QScoreModel, get_qscores
+from .tail_noise_model import KDE_noise_generator 
 from .fragment_lengths import FragmentLengths
 from .identities import Identities
 from .version import __version__
@@ -40,6 +41,7 @@ def simulate(args, output=sys.stderr):
     identities = Identities(args.mean_identity, args.identity_stdev, args.max_identity, output)
     error_model = ErrorModel(args.error_model, output)
     qscore_model = QScoreModel(args.qscore_model, output)
+    tail_model = KDE_noise_generator.load(args.tail_noise_model)
     ref_contigs, ref_contig_weights = get_ref_contig_weights(ref_seqs, ref_depths)
     print_glitch_summary(args.glitch_rate, args.glitch_size, args.glitch_skip, output)
 
@@ -65,7 +67,7 @@ def simulate(args, output=sys.stderr):
                                         start_adapt_amount, end_adapt_rate, end_adapt_amount, ref_contig_idx)
         target_identity = identities.get_identity()
         seq, quals, actual_identity, identity_by_qscores = \
-            sequence_fragment(fragment, target_identity, error_model, qscore_model)
+            sequence_fragment(fragment, target_identity, error_model, qscore_model, tail_model)
         if len(seq) == 0:
             continue
 
@@ -239,11 +241,12 @@ def get_junk_fragment(fragment_length):
     return junk_frag[:fragment_length]
 
 
-def sequence_fragment(fragment, target_identity, error_model, qscore_model):
+def sequence_fragment(fragment, target_identity, error_model, qscore_model, tail_model):
 
     # Buffer the fragment a bit so errors can be added to the first and last bases.
     k_size = error_model.kmer_size
-    fragment = get_random_sequence(k_size) + fragment + get_random_sequence(k_size)
+    tail_noise_seq = tail_model.noise_seq(len(fragment))
+    fragment = get_random_sequence(k_size) + fragment +  tail_noise_seq +  get_random_sequence(k_size)
     frag_len = len(fragment)
 
     # A list to hold the bases for the errors-added fragment. Note that these values can be ''
@@ -512,5 +515,7 @@ def adjust_depths(ref_seqs, ref_depths, ref_circular, frag_lengths, args):
         # Linear plasmids may have to have their depth increased due compensate for truncations.
         if not ref_circ:
             passing_total = sum(min(ref_len, length) for length in sampled_lengths)
+            if passing_total == 0:
+                continue
             adjustment = total / passing_total
             ref_depths[ref_name] *= adjustment
