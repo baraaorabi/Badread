@@ -59,10 +59,10 @@ def simulate(args, output=sys.stderr):
     print('', file=output)
     count, total_size = 0, 0
     print_progress(count, total_size, target_size, output)
-    while total_size < target_size:
+    for ref_contig_idx in range(len(ref_contigs)):
         fragment, info = build_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs, ref_contigs,
                                         ref_contig_weights, ref_circular, args, start_adapt_rate,
-                                        start_adapt_amount, end_adapt_rate, end_adapt_amount)
+                                        start_adapt_amount, end_adapt_rate, end_adapt_amount, ref_contig_idx)
         target_identity = identities.get_identity()
         seq, quals, actual_identity, identity_by_qscores = \
             sequence_fragment(fragment, target_identity, error_model, qscore_model)
@@ -89,11 +89,11 @@ def simulate(args, output=sys.stderr):
 
 def build_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs, ref_contigs, ref_contig_weights,
                    ref_circular, args, start_adapt_rate, start_adapt_amount, end_adapt_rate,
-                   end_adapt_amount):
+                   end_adapt_amount, ref_contig_idx):
     fragment = [get_start_adapter(start_adapt_rate, start_adapt_amount, args.start_adapter_seq)]
     info = []
     frag_seq, frag_info = get_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs,
-                                       ref_contigs, ref_contig_weights, ref_circular, args)
+                                       ref_contigs, ref_contig_weights, ref_circular, args, ref_contig_idx)
     fragment.append(frag_seq)
     info.append(','.join(frag_info))
 
@@ -104,7 +104,7 @@ def build_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs, ref_contigs, ref_c
         if random_chance(settings.CHIMERA_START_ADAPTER_CHANCE):
             fragment.append(args.start_adapter_seq)
         frag_seq, frag_info = get_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs,
-                                           ref_contigs, ref_contig_weights, ref_circular, args)
+                                           ref_contigs, ref_contig_weights, ref_circular, args, ref_contig_idx)
         fragment.append(frag_seq)
         info.append(','.join(frag_info))
     fragment.append(get_end_adapter(end_adapt_rate, end_adapt_amount, args.end_adapter_seq))
@@ -145,7 +145,7 @@ def get_target_size(ref_size, quantity):
 
 
 def get_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs, ref_contigs, ref_contig_weights,
-                 ref_circular, args):
+                 ref_circular, args, ref_contig_idx):
     fragment_length = frag_lengths.get_fragment_length()
     fragment_type = get_fragment_type(args)
     if fragment_type == 'junk':
@@ -160,7 +160,7 @@ def get_fragment(frag_lengths, ref_seqs, rev_comp_ref_seqs, ref_contigs, ref_con
     # repeatedly until we get a result.
     for _ in range(1000):
         seq, info = get_real_fragment(fragment_length, ref_seqs, rev_comp_ref_seqs, ref_contigs,
-                                      ref_contig_weights, ref_circular, forward_strand_probability)
+                                      ref_contig_weights, ref_circular, forward_strand_probability, ref_contig_idx)
         if seq != '':
             return seq, info
     sys.exit('Error: failed to generate any sequence fragments - are your read lengths '
@@ -183,12 +183,15 @@ def get_fragment_type(args):
 
 
 def get_real_fragment(fragment_length, ref_seqs, rev_comp_ref_seqs, ref_contigs,
-                      ref_contig_weights, ref_circular, forward_strand_probability):
+                      ref_contig_weights, ref_circular, forward_strand_probability, ref_contig_idx=None):
 
     if len(ref_contigs) == 1:
         contig = ref_contigs[0]
     else:
-        contig = random.choices(ref_contigs, weights=ref_contig_weights)[0]
+        if ref_contig_idx == None:
+            contig = random.choices(ref_contigs, weights=ref_contig_weights)[0]
+        else:
+            contig = ref_contigs[ref_contig_idx]
     info = [contig]
     if random_chance(forward_strand_probability):
         seq = ref_seqs[contig]
