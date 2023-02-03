@@ -40,7 +40,9 @@ def main(output=sys.stderr):
     elif args.subparser_name == 'qscore_model':
         from .qscore_model import make_qscore_model
         make_qscore_model(args, output=output)
-
+    elif args.subparser_name == 'tail_noise_model':
+        from .tail_noise_model import make_tail_noise_model
+        make_tail_noise_model(args, output=output)
     elif args.subparser_name == 'plot':
         from .plot_window_identity import plot_window_identity
         plot_window_identity(args)
@@ -56,6 +58,7 @@ def parse_args(args):
     error_model_subparser(subparsers)
     qscore_model_subparser(subparsers)
     plot_subparser(subparsers)
+    tail_subparser(subparsers)
 
     longest_choice_name = max(len(c) for c in subparsers.choices)
     subparsers.help = 'R|'
@@ -105,6 +108,8 @@ def simulate_subparser(subparsers):
     sim_args.add_argument('--qscore_model', type=str, default='nanopore2020',
                           help='Can be "nanopore2018", "nanopore2020", "pacbio2016", "random", '
                                '"ideal" or a model filename')
+    sim_args.add_argument('--tail_noise_model', type=str, default='none',
+                          help='Can be "nanopore", "pacbio", "none" or a model filename')
     sim_args.add_argument('--seed', type=int,
                           help='Random number generator seed for deterministic output (default: '
                                'different output each time)')
@@ -210,6 +215,38 @@ def qscore_model_subparser(subparsers):
                             help="Show program's version number and exit")
 
 
+def tail_subparser(subparsers):
+    group = subparsers.add_parser('tail_noise_model', description='Build a RNAInfuser-Badread tail noise model',
+                                  formatter_class=MyHelpFormatter, add_help=False)
+
+    required_args = group.add_argument_group('Required arguments')
+
+
+    required_args.add_argument('--out', type=str, required=True,
+                               help='Output path where matrices are saved')
+    required_args.add_argument('--alignment', type=str, required=True,
+                               help='PAF alignment of reads aligned to reference')
+
+    optional_args = group.add_argument_group('Optional arguments')
+    optional_args.add_argument('--reads', type=str,
+                               help='FASTQ of real reads')
+
+    optional_args.add_argument('--bw', type=int, default=50,
+                               help='KDE bandwidth')
+
+    optional_args.add_argument('--sample_size', type=int, default=1000000,
+                               help='Sample size to compute the tail model')
+    optional_args.add_argument('--range', type=int, nargs=3, default=[100,10000,25],
+                            help="Range which probabilities are computed formatted as --range start end step -> (start,end,step)")
+    
+    other_args = group.add_argument_group('Other')
+    other_args.add_argument('--threads', type=int, default=8,
+                               help='Number of threads')
+    other_args.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
+                            help='Show this help message and exit')
+    other_args.add_argument('--version', action='version', version='Badread v' + __version__,
+                            help="Show program's version number and exit")
+
 def plot_subparser(subparsers):
     group = subparsers.add_parser('plot', description='View read identities over a sliding window',
                                   formatter_class=MyHelpFormatter, add_help=False)
@@ -246,6 +283,11 @@ def check_simulate_args(args):
             not pathlib.Path(args.error_model).is_file():
         sys.exit(f'Error: {args.error_model} is not a file\n'
                  f'  --error_model must be "random" or a filename')
+    tail_noise_model = args.tail_noise_model.lower()
+    if tail_noise_model not in ['none', 'nanopore', 'pacbio'] and \
+            not pathlib.Path(args.tail_noise_model).is_file():
+        sys.exit(f'Error: {args.tail_noise_model} is not a file\n'
+                 f'  --tail_noise_model must be "none", "nanopore", "pacbio" or a filename')
 
     qscore_model = args.qscore_model.lower()
     if qscore_model not in ['random', 'ideal', 'nanopore2018', 'nanopore2020', 'pacbio2016'] and \
