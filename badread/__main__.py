@@ -32,7 +32,10 @@ def main(output=sys.stderr):
         check_simulate_args(args)
         from .simulate import simulate
         simulate(args, output=output)
-
+    if args.subparser_name == 'simulate_stream':
+        check_sim_stream_args(args)
+        from .simulate import simulate_stream
+        simulate_stream(args, output=output)
     elif args.subparser_name == 'error_model':
         from .error_model import make_error_model
         make_error_model(args, output=output)
@@ -55,6 +58,7 @@ def parse_args(args):
 
     subparsers = parser.add_subparsers(title='Commands', dest='subparser_name')
     simulate_subparser(subparsers)
+    simulate_stream_subparser(subparsers)
     error_model_subparser(subparsers)
     qscore_model_subparser(subparsers)
     plot_subparser(subparsers)
@@ -82,6 +86,52 @@ def parse_args(args):
 
     return parser.parse_args(args)
 
+
+def simulate_stream_subparser(subparsers):
+    group = subparsers.add_parser('simulate_stream', description='Generate fake long reads',
+                                  formatter_class=MyHelpFormatter, add_help=False)
+
+    required_args = group.add_argument_group('Required arguments')
+    required_args.add_argument('--reference', type=str, required=True,
+                               help='Reference FASTA file (can be gzipped)')
+
+    sim_args = group.add_argument_group('Simulation parameters',
+                                        description='Length and identity and error distributions')
+    sim_args.add_argument('--identity', type=str, default='87.5,97.5,5',
+                          help='Sequencing identity distribution (mean, max and stdev, '
+                               'default: DEFAULT)')
+    sim_args.add_argument('--error_model', type=str, default='nanopore2020',
+                          help='Can be "nanopore2018", "nanopore2020", "pacbio2016", "random" or '
+                               'a model filename')
+    sim_args.add_argument('--qscore_model', type=str, default='nanopore2020',
+                          help='Can be "nanopore2018", "nanopore2020", "pacbio2016", "random", '
+                               '"ideal" or a model filename')
+    sim_args.add_argument('--tail_noise_model', type=str, default='none',
+                          help='Can be "nanopore", "pacbio", "none" or a model filename')
+    sim_args.add_argument('--seed', type=int,
+                          help='Random number generator seed for deterministic output (default: '
+                               'different output each time)')
+
+    problem_args = group.add_argument_group('Adapters',
+                                            description='Controls adapter sequences on the start '
+                                                        'and end of reads')
+    problem_args.add_argument('--start_adapter', type=str, default='90,60',
+                              help='Adapter parameters for read starts (rate and amount, '
+                                   'default: DEFAULT)')
+    problem_args.add_argument('--end_adapter', type=str, default='50,20',
+                              help='Adapter parameters for read ends (rate and amount, '
+                                   'default: DEFAULT)')
+    problem_args.add_argument('--start_adapter_seq', type=str,
+                              default='AATGTACTTCGTTCAGTTACGTATTGCT',
+                              help='Adapter sequence for read starts')
+    problem_args.add_argument('--end_adapter_seq', type=str, default='GCAATACGTAACTGAACGAAGT',
+                              help='Adapter sequence for read ends')
+
+    other_args = group.add_argument_group('Other')
+    other_args.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
+                            help='Show this help message and exit')
+    other_args.add_argument('--version', action='version', version='Badread v' + __version__,
+                            help="Show program's version number and exit")
 
 def simulate_subparser(subparsers):
     group = subparsers.add_parser('simulate', description='Generate fake long reads',
@@ -273,6 +323,62 @@ def plot_subparser(subparsers):
     other_args.add_argument('--version', action='version', version='Badread v' + __version__,
                             help="Show program's version number and exit")
 
+def check_sim_stream_args(args):
+    if not pathlib.Path(args.reference).is_file():
+        sys.exit(f'Error: {args.reference} is not a file')
+
+    error_model = args.error_model.lower()
+    if error_model not in ['random', 'nanopore2018', 'nanopore2020', 'pacbio2016'] and \
+            not pathlib.Path(args.error_model).is_file():
+        sys.exit(f'Error: {args.error_model} is not a file\n'
+                 f'  --error_model must be "random" or a filename')
+    tail_noise_model = args.tail_noise_model.lower()
+    if tail_noise_model not in ['none', 'nanopore', 'pacbio'] and \
+            not pathlib.Path(args.tail_noise_model).is_file():
+        sys.exit(f'Error: {args.tail_noise_model} is not a file\n'
+                 f'  --tail_noise_model must be "none", "nanopore", "pacbio" or a filename')
+
+    qscore_model = args.qscore_model.lower()
+    if qscore_model not in ['random', 'ideal', 'nanopore2018', 'nanopore2020', 'pacbio2016'] and \
+            not pathlib.Path(args.error_model).is_file():
+        sys.exit(f'Error: {args.error_model} is not a file\n'
+                 f'  --qscore_model must be "random", "ideal" or a filename')
+
+
+    try:
+        identity_parameters = [float(x) for x in args.identity.split(',')]
+        args.mean_identity = identity_parameters[0]
+        args.max_identity = identity_parameters[1]
+        args.identity_stdev = identity_parameters[2]
+    except (ValueError, IndexError):
+        sys.exit('Error: could not parse --identity values')
+    if args.mean_identity > 100.0:
+        sys.exit('Error: mean read identity cannot be more than 100')
+    if args.max_identity > 100.0:
+        sys.exit('Error: max read identity cannot be more than 100')
+    if args.mean_identity <= settings.MIN_MEAN_READ_IDENTITY:
+        sys.exit(f'Error: mean read identity must be at least {settings.MIN_MEAN_READ_IDENTITY}')
+    if args.max_identity <= settings.MIN_MEAN_READ_IDENTITY:
+        sys.exit(f'Error: max read identity must be at least {settings.MIN_MEAN_READ_IDENTITY}')
+    if args.mean_identity > args.max_identity:
+        sys.exit(f'Error: mean identity ({args.mean_identity}) cannot be larger than max '
+                 f'identity ({args.max_identity})')
+    if args.identity_stdev < 0.0:
+        sys.exit('Error: read identity stdev cannot be negative')
+
+
+    if args.start_adapter_seq != '':
+        if not str_is_int(args.start_adapter_seq):
+            args.start_adapter_seq = args.start_adapter_seq.upper()
+            if not str_is_dna_sequence(args.start_adapter_seq):
+                sys.exit('Error: --start_adapter_seq must be a DNA sequence or a number')
+    if args.end_adapter_seq != '':
+        if not str_is_int(args.end_adapter_seq):
+            args.end_adapter_seq = args.end_adapter_seq.upper()
+            if not str_is_dna_sequence(args.end_adapter_seq):
+                sys.exit('Error: --end_adapter_seq must be a DNA sequence or a number')
+
+
 
 def check_simulate_args(args):
     if not pathlib.Path(args.reference).is_file():
@@ -294,18 +400,6 @@ def check_simulate_args(args):
             not pathlib.Path(args.error_model).is_file():
         sys.exit(f'Error: {args.error_model} is not a file\n'
                  f'  --qscore_model must be "random", "ideal" or a filename')
-
-    if args.forward_strand > 1 or args.forward_strand < 0:
-        sys.exit('Error: --forward_strand should be in [0, 1]')
-    if args.chimeras > 50:
-        sys.exit('Error: --chimeras cannot be greater than 50')
-    if args.junk_reads > 100:
-        sys.exit('Error: --junk_reads cannot be greater than 100')
-    if args.random_reads > 100:
-        sys.exit('Error: --random_reads cannot be greater than 100')
-    if args.junk_reads + args.random_reads > 100:
-        sys.exit('Error: --junk_reads and --random_reads cannot sum to more than 100')
-
     try:
         length_parameters = [float(x) for x in args.length.split(',')]
         args.mean_frag_length = length_parameters[0]

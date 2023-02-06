@@ -20,7 +20,7 @@ import random
 import sys
 import uuid
 from .misc import load_fasta, get_random_sequence, reverse_complement, random_chance, \
-    float_to_str, str_is_int, identity_from_edlib_cigar
+    float_to_str, str_is_int, identity_from_edlib_cigar, get_open_func, generate_fasta
 from .error_model import ErrorModel
 from .qscore_model import QScoreModel, get_qscores
 from .tail_noise_model import KDE_noise_generator 
@@ -28,6 +28,63 @@ from .fragment_lengths import FragmentLengths
 from .identities import Identities
 from .version import __version__
 from . import settings
+
+
+def add_adapters(seq, info,  start_param, end_param):
+    fragment = [get_start_adapter(*start_param),
+                seq,
+                get_end_adapter(*end_param)
+                ]
+    info.insert(0, f"adapter:{len(fragment[0])}")
+    info.append(f"adapter:{len(fragment[-1])}")
+    return "".join(fragment), info
+
+
+
+def simulate_stream(args, output=sys.stderr):
+    print_intro(output)
+    if args.seed is not None:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+    identities = Identities(args.mean_identity, args.identity_stdev, args.max_identity, output)
+    error_model = ErrorModel(args.error_model, output)
+    qscore_model = QScoreModel(args.qscore_model, output)
+    tail_model = KDE_noise_generator.load(args.tail_noise_model)
+
+
+
+    start_adapt_rate, start_adapt_amount = adapter_parameters(args.start_adapter)
+    end_adapt_rate, end_adapt_amount = adapter_parameters(args.end_adapter)
+    random_start, random_end = build_random_adapters(args)
+    print_adapter_summary(start_adapt_rate, start_adapt_amount, args.start_adapter_seq,
+                          end_adapt_rate, end_adapt_amount, args.end_adapter_seq,
+                          random_start, random_end, output)
+
+
+
+    #TODO gliches, chimeras etc
+    for contig, fragment in generate_fasta(get_open_func(args.reference)(args.reference)):
+        info = [contig]
+        fragment, info = add_adapters(fragment, info,
+                                      (start_adapt_rate, start_adapt_amount, args.start_adapter_seq),
+                                      (end_adapt_rate, end_adapt_amount, args.end_adapter_seq)
+                                      )
+
+        target_identity = identities.get_identity()
+        seq, quals, actual_identity, identity_by_qscores = \
+            sequence_fragment(fragment, target_identity, error_model, qscore_model, tail_model)
+        info.append(f'length={len(seq)}')
+        info.append(f'error-free_length={len(fragment)}')
+        info.append(f'read_identity={actual_identity * 100.0:.2f}%')
+
+        read_name = uuid.UUID(int=random.getrandbits(128))
+        info = ' '.join(info)
+        print(f'@{read_name} {info}')
+        print(seq)
+        print('+')
+        print(quals)
+
+    print('\n', file=output)
 
 def simulate(args, output=sys.stderr):
     print_intro(output)

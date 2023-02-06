@@ -114,6 +114,14 @@ class Custom2Dist:
             mult = 1
         return lambda : int(mult * self.distributions[pos]())
 
+class Mock_noise_generator:
+    def __init__(self):
+        pass
+    def sample(self, x):
+        return 0
+    def noise_seq(self, i):
+        return ""
+
 class KDE_noise_generator:
     @classmethod
     def from_data(cls, mapped, unmapped, lx, ly, transition_matrix, bw, threads=64):
@@ -168,15 +176,16 @@ class KDE_noise_generator:
         json.dump(dc, file)
     @classmethod
     def load(cls, model_type_or_filename):
-
         this_script_dir = pathlib.Path(os.path.dirname(os.path.realpath(__file__)))
 
         if model_type_or_filename == 'nanopore':
-            none = False
+
             dc = json.load(gzip.open(str(this_script_dir / 'tail_models' / 'nanopore.json.gz'),'rt'))
+        elif model_type_or_filename.lower() in ["none", "pacbio"]:
+            return Mock_noise_generator()       
         else:
-            none = False
-            dc = json.load(file)
+
+            dc = json.load(gzip.open(model_type_or_filename,'rt'))
         return cls(dc["lx"], dc["ly"], dc["grid"], (dc["begin"], dc["trans"]), dc["ratio"], dc["bases"])
 
 class KDE_noise_sampler:

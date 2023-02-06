@@ -119,6 +119,24 @@ def load_fastq(filename, output=sys.stderr, dot_interval=1000):
     print('', file=output, flush=True)
     return reads
 
+def generate_fasta(file):
+    name = ""
+    seq = list()
+    for l in (file):
+        l = l.rstrip('\n')
+        if l[0]=='>':
+            if len(seq) == 0:
+                name = l[1:]
+                continue
+            seq = ''.join(seq)
+            yield (name, seq)
+            seq = list()
+            name = l[1:]
+        else:
+            seq.append(l)
+    return (name, seq)
+
+
 
 def load_fasta(filename):
     fasta_seqs = collections.OrderedDict()
